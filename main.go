@@ -7,8 +7,16 @@ import (
 	"strings"
 )
 
+type Condition struct {
+	Left     string
+	Operator string
+	Right    string
+}
+
 type SelectQuery struct {
-	Table string
+	Columns []string
+	Table   string
+	Where   *Condition
 }
 
 func main() {
@@ -53,9 +61,11 @@ func handleConnection(conn net.Conn) {
 
 			result, err := ParseSQL(query)
 			if err != nil {
-				conn.Write([]byte("ERR: " + err.Error() + "\n"))
+				panic(err)
+				//conn.Write([]byte("ERR: " + err.Error() + "\n"))
 			} else {
-				conn.Write([]byte(fmt.Sprintf("PARSED: %+v\n", result)))
+				fmt.Printf("PARSED: %+v\n", result)
+				//conn.Write([]byte(fmt.Sprintf("PARSED: %+v\n", result)))
 			}
 
 			// reset buffer for next query
@@ -79,18 +89,65 @@ func ParseSQL(query string) (interface{}, error) {
 }
 
 func parseSelect(query string) (SelectQuery, error) {
-	// Example: SELECT * FROM users
-	parts := strings.Fields(query) // splits by spaces
-	for _, tok := range parts {
-		fmt.Println("\"", tok, "\"")
+	query = strings.TrimSpace(query)
+	query = strings.TrimSuffix(query, ";")
+
+	// Split by spaces first
+	parts := strings.Fields(query)
+
+	// Must start with SELECT
+	if len(parts) < 4 || strings.ToUpper(parts[0]) != "SELECT" {
+		return SelectQuery{}, fmt.Errorf("invalid SELECT syntax")
 	}
 
-	// Expecting: ["SELECT", "*", "FROM", "users"]
-	if len(parts) != 4 {
-		return SelectQuery{}, nil // basic error handling for now
+	// Find FROM index
+	fromIdx := -1
+	for i, tok := range parts {
+		if strings.ToUpper(tok) == "FROM" {
+			fromIdx = i
+			break
+		}
+	}
+
+	if fromIdx == -1 || fromIdx == 1 {
+		return SelectQuery{}, fmt.Errorf("missing FROM clause")
+	}
+
+	// Columns are everything between SELECT and FROM
+	columnsStr := strings.Join(parts[1:fromIdx], " ")
+	columns := strings.Split(columnsStr, ",")
+	for i := range columns {
+		columns[i] = strings.TrimSpace(columns[i])
+	}
+
+	// Table name is next token after FROM
+	table := parts[fromIdx+1]
+
+	// Check if WHERE clause exists
+	var cond *Condition
+	whereIdx := -1
+	for i, tok := range parts {
+		if strings.ToUpper(tok) == "WHERE" {
+			whereIdx = i
+			break
+		}
+	}
+
+	if whereIdx != -1 {
+		// Simple condition: left operator right
+		if len(parts) < whereIdx+4 {
+			return SelectQuery{}, fmt.Errorf("invalid WHERE clause")
+		}
+		cond = &Condition{
+			Left:     parts[whereIdx+1],
+			Operator: parts[whereIdx+2],
+			Right:    parts[whereIdx+3],
+		}
 	}
 
 	return SelectQuery{
-		Table: parts[3],
+		Columns: columns,
+		Table:   table,
+		Where:   cond,
 	}, nil
 }
