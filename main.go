@@ -138,7 +138,14 @@ func handleConnection(conn net.Conn) {
 					conn.Write([]byte("Row inserted\r\n"))
 					fmt.Printf("Inserted into %s values %v\r\n", t.Table, t.Values)
 				case models.SelectQuery:
-					conn.Write([]byte(fmt.Sprintf("PARSED: %+v\r\n", t)))
+					rows, err := storage.SelectFromTable(t)
+					if err != nil {
+						conn.Write([]byte("ERR: " + err.Error() + "\r\n"))
+						break
+					}
+					for _, r := range rows {
+						conn.Write([]byte(strings.Join(r, ",") + "\r\n"))
+					}
 			}
 
 			// reset buffer for next query
