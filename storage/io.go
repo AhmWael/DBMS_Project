@@ -1,43 +1,54 @@
 package storage
 
 import (
-    "os"
     "strings"
     "fmt"
 	"awsql/models"
+    "awsql/storage/page"
+    "awsql/storage/table"
 )
 
-// Create table: write header to disk
+// Create table on disk
 func CreateTableOnDisk(q models.CreateTableQuery) error {
-    filename := "data/" + q.Table + ".txt"
+	path := "data/" + q.Table + ".tbl"
 
-    // If file exists, error
-    if _, err := os.Stat(filename); err == nil {
-        return fmt.Errorf("table already exists")
-    }
+	pm, err := page.OpenPageManager(path)
+	if err != nil {
+		return err
+	}
 
-    f, err := os.Create(filename)
-    if err != nil {
-        return err
-    }
-    defer f.Close()
+	headerPageID, _ := pm.AllocatePage() // allocate page 0 for header
+	headerPage := page.NewPage(headerPageID)
 
-    // First line = header
-    _, err = f.WriteString(strings.Join(q.Columns, ",") + "\n")
-    return err
+	table.WriteHeader(headerPage.Data, q.Columns)
+
+	return pm.WritePage(headerPage)
 }
 
 // Insert row into table
 func InsertIntoTable(q models.InsertQuery) error {
-    filename := "data/" + q.Table + ".txt"
+	path := "data/" + q.Table + ".tbl"
 
-    f, err := os.OpenFile(filename, os.O_APPEND|os.O_WRONLY, 0644)
-    if err != nil {
-        return err
-    }
-    defer f.Close()
+	pm, err := page.OpenPageManager(path)
+	if err != nil {
+		return err
+	}
 
-    _, err = f.WriteString(strings.Join(q.Values, ",") + "\n")
-    return err
+	// TEMP: always insert into page 1
+	dataPageID := page.PageID(1)
+
+	p, err := pm.ReadPage(dataPageID)
+	if err != nil {
+		p = page.NewPage(dataPageID)
+	}
+
+	row := []byte(strings.Join(q.Values, ","))
+
+	ok := table.InsertRow(p.Data, row)
+	if !ok {
+		return fmt.Errorf("page full (splitting not implemented yet)")
+	}
+
+	return pm.WritePage(p)
 }
 

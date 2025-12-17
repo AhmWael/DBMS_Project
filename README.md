@@ -7,7 +7,10 @@
 
 ## Overview
 
-**awsql** is a lightweight, file-based DBMS implemented in Go. It supports basic SQL operations, Write-Ahead Logging (WAL), and a TCP server mode, allowing integration into existing systems similar to MySQL or PostgreSQL. The goal is to provide a minimal but functional SQL database for educational and small-scale projects.
+**awsql** is a lightweight, educational database management system (DBMS) written in Go.
+It implements a minimal SQL engine, a TCP-based server, Write-Ahead Logging (WAL), and a heap-based storage engine with fixed-size paging, inspired by PostgreSQL’s internal architecture.
+
+The primary goal of awsql is to learn and demonstrate database internals, not to compete with production systems.
 
 ---
 
@@ -29,12 +32,40 @@
 
 ## Architecture
 
-* **main.go**: TCP server and connection handling
-* **parser.go**: SQL parsing and tokenization
-* **storage/io.go**: Table file operations (CREATE, INSERT, WAL)
-* **storage/wal.go**: Write-Ahead Logging, crash recovery
-* **models/query.go**: Query struct definitions
-* **data/**: Folder storing table files and WAL logs
+```
+DBMS_Project/
+├── config/
+│   └── version.go           # Server name and version
+│
+├── models/
+│   └── query.go             # Query and condition structs
+│
+├── parser/
+│   └── parser.go            # SQL parsing logic
+│
+├── storage/
+│   ├── io.go                # High-level table I/O
+│   │
+│   ├── page/
+│   │   ├── constants.go     # Page size (8KB) and constants
+│   │   ├── manager.go      # Page read/write manager
+│   │   └── page.go         # Page structure and helpers
+│   │
+│   └── table/
+│       ├── header.go        # Table metadata and header layout
+│       └── heap.go          # Heap table implementation
+│
+├── wal/
+│   └── wal.go               # Write-Ahead Logging
+│
+├── data/
+│   ├── *.tbl                # Heap table files (binary)
+│   └── wal.log              # WAL file
+│
+├── main.go                  # TCP server and query execution
+├── go.mod
+└── README.md
+```
 
 ---
 
@@ -43,8 +74,8 @@
 1. Clone the repository:
 
 ```bash
-git clone https://github.com/yourusername/awsql.git
-cd awsql
+git clone https://github.com/AhmWael/DBMS_Project.git
+cd DBMS_Project
 ```
 
 2. Run directly (requires Go installed):
